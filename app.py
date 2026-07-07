@@ -398,7 +398,7 @@ with st.sidebar:
     st.button("\u2699\uFE0F 설정", use_container_width=True)
 
     st.markdown("---")
-    st.markdown("**\uD83D\uDC65 구매팀**")
+    st.markdown("**\U0001F465 구매팀**")
     st.caption("팀원 10명")
 
 if nav != "원료 비교":
