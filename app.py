@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import base64
+import html
 import io
 from datetime import datetime
 
@@ -297,6 +299,8 @@ table.cosbuy-table tr:last-child td { border-bottom: none; }
     color: var(--warn); font-weight: 700; font-family: ui-monospace, monospace; font-size: 12.5px;
 }
 .footnote { font-size: 12px; color: var(--ink-400); margin-top: 6px; }
+.file-link { color: var(--accent); font-weight: 700; text-decoration: none; }
+.file-link:hover { text-decoration: underline; }
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
@@ -320,6 +324,9 @@ if "quote_uploads" not in st.session_state:
         "신규 견적": len(st.session_state.df),
         "갱신 건수": 0,
         "신규 원료": st.session_state.df["원료"].nunique(),
+        "_download_name": "기본데이터셋.csv",
+        "_bytes": DEFAULT_CSV.encode("utf-8-sig"),
+        "_mime": "text/csv",
     }]
 if "processed_upload_ids" not in st.session_state:
     st.session_state.processed_upload_ids = set()
@@ -339,6 +346,16 @@ if "sort_option" not in st.session_state:
 # ------------------------------------------------------------
 # 파일 파싱 유틸 (열 이름 자동 인식: 원본 JS 로직과 동일한 규칙)
 # ------------------------------------------------------------
+def guess_mime(filename):
+    ext = filename.rsplit(".", 1)[-1].lower()
+    if ext == "csv":
+        return "text/csv"
+    if ext == "xlsx":
+        return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    if ext == "xls":
+        return "application/vnd.ms-excel"
+    return "application/octet-stream"
+
 def find_col(columns, patterns):
     for col in columns:
         c = str(col).strip().lower()
@@ -469,9 +486,15 @@ def render_supplier_tab(df):
 # ------------------------------------------------------------
 # 견적함 탭
 # ------------------------------------------------------------
+def make_download_link(download_name, data_bytes, mime, label):
+    b64 = base64.b64encode(data_bytes).decode()
+    safe_name = html.escape(download_name, quote=True)
+    safe_label = html.escape(label)
+    return f'<a class="file-link" href="data:{mime};base64,{b64}" download="{safe_name}">{safe_label}</a>'
+
 def render_quote_inbox_tab():
     st.markdown('<p class="eyebrow">구매팀 워크스페이스</p><p class="page-title">견적함</p>', unsafe_allow_html=True)
-    st.caption("지금까지 반영된 견적 시트 목록입니다. 새 견적서는 '원료 비교' 탭에서 업로드할 수 있습니다.")
+    st.caption("지금까지 반영된 견적 시트 목록입니다. 파일명을 누르면 다운로드됩니다. 새 견적서는 '원료 비교' 탭에서 업로드할 수 있습니다.")
 
     uploads = st.session_state.quote_uploads
     c1, c2, c3 = st.columns(3)
@@ -480,8 +503,26 @@ def render_quote_inbox_tab():
     c3.metric("누적 갱신 견적", f"{sum(u['갱신 건수'] for u in uploads)}건")
 
     st.write("")
-    log_df = pd.DataFrame(uploads)
-    st.dataframe(log_df, use_container_width=True, hide_index=True)
+
+    row_htmls = []
+    for u in uploads:
+        link = make_download_link(u["_download_name"], u["_bytes"], u["_mime"], u["파일명"])
+        row_htmls.append(
+            f"<tr><td>{link}</td><td>{u['업로드 일시']}</td>"
+            f"<td>{u['신규 견적']}</td><td>{u['갱신 건수']}</td><td>{u['신규 원료']}</td></tr>"
+        )
+    rows_html = "".join(row_htmls)
+    table_html = (
+        f'<div class="material-card">'
+        f'<table class="cosbuy-table">'
+        f'<thead><tr>'
+        f'<th>파일명</th><th>업로드 일시</th><th>신규 견적</th><th>갱신 건수</th><th>신규 원료</th>'
+        f'</tr></thead>'
+        f'<tbody>{rows_html}</tbody>'
+        f'</table>'
+        f'</div>'
+    )
+    st.markdown(table_html, unsafe_allow_html=True)
 
 # ------------------------------------------------------------
 # 리포트 탭
@@ -648,6 +689,7 @@ with st.container(border=True):
             if file_id in st.session_state.processed_upload_ids:
                 continue
             st.session_state.processed_upload_ids.add(file_id)
+            file_bytes = f.getvalue()
 
             new_df, status = parse_uploaded_file(f)
             if status == "ok":
@@ -661,6 +703,9 @@ with st.container(border=True):
                     "신규 견적": a,
                     "갱신 건수": u,
                     "신규 원료": nmat,
+                    "_download_name": f.name,
+                    "_bytes": file_bytes,
+                    "_mime": guess_mime(f.name),
                 })
             elif status == "missing_columns":
                 errors.append(f"{f.name}: 필수 열(원료/공급업체/단가)을 찾을 수 없습니다.")
