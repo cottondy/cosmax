@@ -211,14 +211,42 @@ section[data-testid="stSidebar"] div[data-testid="stButton"] button * {
 }
 .cosmax-badge {
     display: inline-flex; align-items: center;
-    background: #ffffff; border-radius: 8px;
-    padding: 8px 14px; margin: 4px 0 14px;
+    background: #ffffff; border-radius: 10px;
+    padding: 10px 16px; margin: 4px 0 14px;
 }
-.cosmax-badge img { height: 16px; width: auto; display: block; }
+.cosmax-badge img { height: 28px; width: auto; display: block; }
 
 .sidebar-brand {
-    font-size: 20px; font-weight: 900; color: #ffffff !important;
+    font-size: 30px; font-weight: 900; color: #ffffff !important;
     letter-spacing: -0.01em; margin-bottom: 6px;
+}
+
+section[data-testid="stSidebar"] div[role="radiogroup"] {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+section[data-testid="stSidebar"] div[role="radiogroup"] label {
+    padding: 10px 14px;
+    border-radius: 10px;
+    margin: 0;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+section[data-testid="stSidebar"] div[role="radiogroup"] label > div:first-child {
+    display: none;
+}
+section[data-testid="stSidebar"] div[role="radiogroup"] label:hover {
+    background: rgba(255,255,255,0.08);
+}
+section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {
+    background: rgba(255,255,255,0.18);
+}
+section[data-testid="stSidebar"] div[role="radiogroup"] label p {
+    font-size: 14.5px; font-weight: 600; margin: 0;
+}
+section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p {
+    font-weight: 800; color: #ffffff !important;
 }
 
 .eyebrow {
