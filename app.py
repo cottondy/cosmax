@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import plotly.express as px
 import io
 from datetime import datetime
 
@@ -312,6 +313,16 @@ def load_default_df():
 
 if "df" not in st.session_state:
     st.session_state.df = load_default_df()
+if "quote_uploads" not in st.session_state:
+    st.session_state.quote_uploads = [{
+        "파일명": "기본 데이터셋 (내장)",
+        "업로드 일시": "-",
+        "신규 견적": len(st.session_state.df),
+        "갱신 건수": 0,
+        "신규 원료": st.session_state.df["원료"].nunique(),
+    }]
+if "processed_upload_ids" not in st.session_state:
+    st.session_state.processed_upload_ids = set()
 if "weekly_uploads" not in st.session_state:
     st.session_state.weekly_uploads = 3
 if "search" not in st.session_state:
@@ -412,6 +423,140 @@ def merge_into_state(new_df):
     return added, updated, new_materials
 
 # ------------------------------------------------------------
+# 공급업체 탭
+# ------------------------------------------------------------
+def render_supplier_tab(df):
+    st.markdown('<p class="eyebrow">구매팀 워크스페이스</p><p class="page-title">공급업체</p>', unsafe_allow_html=True)
+    st.caption("공급업체별로 납품 가능한 원료와 단가·MOQ·리드타임 조건을 확인하세요.")
+
+    search = st.text_input("공급업체 검색", placeholder="업체명으로 검색", label_visibility="collapsed")
+    suppliers = sorted(df["공급업체"].unique())
+    if search:
+        s = search.strip().lower()
+        suppliers = [sup for sup in suppliers if s in sup.lower()]
+
+    st.markdown(f"전체 공급업체 **{len(suppliers)}곳** 표시 중")
+
+    if not suppliers:
+        st.warning("조건에 맞는 공급업체가 없습니다. 검색어를 조정해 보세요.")
+        return
+
+    for supplier in suppliers:
+        g = df[df["공급업체"] == supplier].sort_values("원료")
+        row_htmls = []
+        for _, r in g.iterrows():
+            moq_display = int(r["MOQ"]) if float(r["MOQ"]).is_integer() else round(r["MOQ"], 1)
+            lead_display = int(r["리드타임"]) if float(r["리드타임"]).is_integer() else r["리드타임"]
+            row_htmls.append(
+                f"<tr><td>{r['원료']}</td><td>{r['단가']:,.2f}</td>"
+                f"<td>{moq_display}</td><td>{lead_display}일</td></tr>"
+            )
+        rows_html = "".join(row_htmls)
+        table_html = (
+            f'<div class="material-card">'
+            f'<p class="material-title">{supplier}</p>'
+            f'<p class="material-sub">납품 원료 {len(g)}종</p>'
+            f'<table class="cosbuy-table">'
+            f'<thead><tr>'
+            f'<th>원료</th><th>단가 (USD/kg)</th><th>MOQ (kg)</th><th>리드타임</th>'
+            f'</tr></thead>'
+            f'<tbody>{rows_html}</tbody>'
+            f'</table>'
+            f'</div>'
+        )
+        st.markdown(table_html, unsafe_allow_html=True)
+
+# ------------------------------------------------------------
+# 견적함 탭
+# ------------------------------------------------------------
+def render_quote_inbox_tab():
+    st.markdown('<p class="eyebrow">구매팀 워크스페이스</p><p class="page-title">견적함</p>', unsafe_allow_html=True)
+    st.caption("지금까지 반영된 견적 시트 목록입니다. 새 견적서는 '원료 비교' 탭에서 업로드할 수 있습니다.")
+
+    uploads = st.session_state.quote_uploads
+    c1, c2, c3 = st.columns(3)
+    c1.metric("업로드된 시트", f"{len(uploads)}건")
+    c2.metric("누적 신규 견적", f"{sum(u['신규 견적'] for u in uploads)}건")
+    c3.metric("누적 갱신 견적", f"{sum(u['갱신 건수'] for u in uploads)}건")
+
+    st.write("")
+    log_df = pd.DataFrame(uploads)
+    st.dataframe(log_df, use_container_width=True, hide_index=True)
+
+# ------------------------------------------------------------
+# 리포트 탭
+# ------------------------------------------------------------
+def compute_material_stats(df):
+    rows = []
+    for material, g in df.groupby("원료"):
+        min_p, max_p, avg_p = g["단가"].min(), g["단가"].max(), g["단가"].mean()
+        variation = (max_p - min_p) / min_p * 100 if min_p > 0 else 0.0
+        rows.append({
+            "원료": material,
+            "공급업체 수": g["공급업체"].nunique(),
+            "최저가": min_p,
+            "평균가": avg_p,
+            "최고가": max_p,
+            "변동폭(%)": variation,
+        })
+    return pd.DataFrame(rows)
+
+def render_report_tab(df):
+    st.markdown('<p class="eyebrow">구매팀 워크스페이스</p><p class="page-title">리포트</p>', unsafe_allow_html=True)
+    st.caption("원료별 가격 변동과 공급망 현황을 통계·시각 자료로 확인하세요.")
+
+    stats = compute_material_stats(df)
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("비교 중인 원료", f"{df['원료'].nunique()}종")
+    c2.metric("참여 공급업체", f"{df['공급업체'].nunique()}곳")
+    c3.metric("평균 가격 변동폭", f"{stats['변동폭(%)'].mean():.1f}%", help="원료별 최저가 대비 최고가 격차의 평균")
+    c4.metric("평균 리드타임", f"{df['리드타임'].mean():.1f}일")
+
+    st.write("")
+
+    top_variation = stats.sort_values("변동폭(%)", ascending=False).head(15).sort_values("변동폭(%)")
+    fig1 = px.bar(
+        top_variation, x="변동폭(%)", y="원료", orientation="h",
+        title="원료별 가격 변동폭 TOP 15 (최저가 대비 최고가 격차)",
+        color="변동폭(%)", color_continuous_scale=["#8b8e9e", "#e0512b"],
+    )
+    fig1.update_layout(template="plotly_white", height=440, margin=dict(l=10, r=10, t=50, b=10))
+    st.plotly_chart(fig1, use_container_width=True)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        avg_by_material = stats.sort_values("평균가", ascending=False).head(15)
+        fig2 = px.bar(
+            avg_by_material, x="원료", y="평균가",
+            title="원료별 평균 단가 (상위 15종, 로그 스케일)", log_y=True,
+        )
+        fig2.update_traces(marker_color="#283282")
+        fig2.update_layout(template="plotly_white", height=380, margin=dict(l=10, r=10, t=50, b=10))
+        st.plotly_chart(fig2, use_container_width=True)
+    with col2:
+        supplier_counts = (
+            df.groupby("공급업체")["원료"].nunique()
+            .reset_index(name="납품 원료 수")
+            .sort_values("납품 원료 수", ascending=False)
+            .head(10)
+        )
+        fig3 = px.pie(
+            supplier_counts, names="공급업체", values="납품 원료 수",
+            title="공급업체별 납품 원료 수 (상위 10곳)", hole=0.45,
+        )
+        fig3.update_layout(template="plotly_white", height=380, margin=dict(l=10, r=10, t=50, b=10))
+        st.plotly_chart(fig3, use_container_width=True)
+
+    st.markdown("#### 원료별 통계 요약")
+    st.dataframe(
+        stats.sort_values("변동폭(%)", ascending=False).style.format({
+            "최저가": "{:,.2f}", "평균가": "{:,.2f}", "최고가": "{:,.2f}", "변동폭(%)": "{:.1f}%"
+        }),
+        use_container_width=True, hide_index=True,
+    )
+
+# ------------------------------------------------------------
 # 사이드바
 # ------------------------------------------------------------
 with st.sidebar:
@@ -433,17 +578,22 @@ with st.sidebar:
     st.markdown("**\U0001F465 구매팀**")
     st.caption("팀원 10명")
 
-if nav != "원료 비교":
-    st.markdown(f'<p class="eyebrow">구매팀 워크스페이스</p><p class="page-title">{nav}</p>', unsafe_allow_html=True)
-    st.info(f"{nav} 화면은 준비 중입니다.")
+df = st.session_state.df
+
+if nav == "공급업체":
+    render_supplier_tab(df)
+    st.stop()
+elif nav == "견적함":
+    render_quote_inbox_tab()
+    st.stop()
+elif nav == "리포트":
+    render_report_tab(df)
     st.stop()
 
 # ------------------------------------------------------------
 # 헤더
 # ------------------------------------------------------------
 st.markdown('<p class="eyebrow">구매팀 워크스페이스</p><p class="page-title">원료 비교</p>', unsafe_allow_html=True)
-
-df = st.session_state.df
 
 # ------------------------------------------------------------
 # 통계 카드
@@ -494,12 +644,24 @@ with st.container(border=True):
         total_added, total_updated, total_new_materials = 0, 0, 0
         errors = []
         for f in uploaded_files:
+            file_id = (f.name, f.size)
+            if file_id in st.session_state.processed_upload_ids:
+                continue
+            st.session_state.processed_upload_ids.add(file_id)
+
             new_df, status = parse_uploaded_file(f)
             if status == "ok":
                 a, u, nmat = merge_into_state(new_df)
                 total_added += a
                 total_updated += u
                 total_new_materials += nmat
+                st.session_state.quote_uploads.append({
+                    "파일명": f.name,
+                    "업로드 일시": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "신규 견적": a,
+                    "갱신 건수": u,
+                    "신규 원료": nmat,
+                })
             elif status == "missing_columns":
                 errors.append(f"{f.name}: 필수 열(원료/공급업체/단가)을 찾을 수 없습니다.")
             elif status == "read_error":
