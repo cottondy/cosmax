@@ -250,10 +250,10 @@ section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked)
 }
 
 .eyebrow {
-    font-size: 11px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.08em; color: var(--ink-400); margin: 0 0 2px;
+    font-size: 14px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--ink-400); margin: 0 0 4px;
 }
-.page-title { font-size: 26px; font-weight: 900; margin: 0 0 18px; letter-spacing: -0.01em; color: var(--ink-900); }
+.page-title { font-size: 34px; font-weight: 900; margin: 0 0 18px; letter-spacing: -0.01em; color: var(--ink-900); }
 
 div[data-testid="stMetric"] {
     background: var(--surface);
