@@ -205,6 +205,10 @@ section[data-testid="stSidebar"] * {
 section[data-testid="stSidebar"] .stRadio label {
     font-weight: 600;
 }
+section[data-testid="stSidebar"] div[data-testid="stButton"] button,
+section[data-testid="stSidebar"] div[data-testid="stButton"] button * {
+    color: var(--ink-900) !important;
+}
 .cosmax-badge {
     display: inline-flex; align-items: center;
     background: #ffffff; border-radius: 8px;
