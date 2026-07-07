@@ -560,7 +560,7 @@ else:
         g_sorted = g.sort_values("단가")
         best_price = g_sorted["단가"].min()
 
-        rows_html = ""
+        row_htmls = []
         for _, r in g_sorted.iterrows():
             moq_display = int(r["MOQ"]) if float(r["MOQ"]).is_integer() else round(r["MOQ"], 1)
             lead_display = int(r["리드타임"]) if float(r["리드타임"]).is_integer() else r["리드타임"]
@@ -569,34 +569,24 @@ else:
             else:
                 pct = (r["단가"] - best_price) / best_price * 100
                 delta_html = f'<span class="badge-plain">+{pct:.1f}%</span>'
-            rows_html += f"""
-            <tr>
-                <td>{r['공급업체']}</td>
-                <td>{r['단가']:,.2f}</td>
-                <td>{moq_display}</td>
-                <td>{lead_display}일</td>
-                <td>{delta_html}</td>
-            </tr>
-            """
+            row_htmls.append(
+                f"<tr><td>{r['공급업체']}</td><td>{r['단가']:,.2f}</td>"
+                f"<td>{moq_display}</td><td>{lead_display}일</td>"
+                f"<td>{delta_html}</td></tr>"
+            )
+        rows_html = "".join(row_htmls)
 
-        table_html = f"""
-        <div class="material-card">
-            <p class="material-title">{material}</p>
-            <p class="material-sub">공급업체 {len(g_sorted)}곳 · 최저 단가 {best_price:,.2f} USD/kg</p>
-            <table class="cosbuy-table">
-                <thead>
-                    <tr>
-                        <th>공급업체</th>
-                        <th>단가 (USD/kg)</th>
-                        <th>MOQ (kg)</th>
-                        <th>리드타임</th>
-                        <th>최저가 대비</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows_html}
-                </tbody>
-            </table>
-        </div>
-        """
+        table_html = (
+            f'<div class="material-card">'
+            f'<p class="material-title">{material}</p>'
+            f'<p class="material-sub">공급업체 {len(g_sorted)}곳 · 최저 단가 {best_price:,.2f} USD/kg</p>'
+            f'<table class="cosbuy-table">'
+            f'<thead><tr>'
+            f'<th>공급업체</th><th>단가 (USD/kg)</th><th>MOQ (kg)</th>'
+            f'<th>리드타임</th><th>최저가 대비</th>'
+            f'</tr></thead>'
+            f'<tbody>{rows_html}</tbody>'
+            f'</table>'
+            f'</div>'
+        )
         st.markdown(table_html, unsafe_allow_html=True)
